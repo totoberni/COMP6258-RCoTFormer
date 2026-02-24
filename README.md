@@ -2,60 +2,56 @@
 
 ## Table of Contents
 
-- [Reference Papers](#reference-papers)
+- [References](#references)
 - [Repo Structure](#repo-structure)
 - [QuickStart](#quickstart)
-  - [Iridis X (A100 GPU)](#iridis-x-a100-gpu)
+  - [Building the Container](#building-the-container)
+  - [Iridis X](#iridis-x)
   - [Adding a New Package](#adding-a-new-package)
 - [Use Guide](#use-guide)
 - [Further Contributions](#further-contributions)
 - [Acknowledgements](#acknowledgements)
 
-## Reference Papers
+## References
+
+| Paper | We use | Link |
+|-------|--------|------|
+| **CoTFormer** (Mohtashami et al., ICLR 2025) | Base architecture, Variant B adaptive depth router (Mixture of Repeats with cross-repeat KV cache), evaluation scripts (`get_ppl_per_mac.py`) | [OpenReview](https://openreview.net/forum?id=7igPXQFupX), [GitHub](https://github.com/epfml/CoTFormer) |
+| **DeepSeek-V2** (DeepSeek-AI, 2024) | Multi-Head Latent Attention (MLA) — KV down/up-projection for compressing the cross-repeat cache | [arXiv:2405.04434](https://arxiv.org/abs/2405.04434) |
+| **RoFormer** (Su et al., 2024) | Rotary Position Embeddings (RoPE), applied post-decompression in MLA integration | [arXiv:2104.09864](https://arxiv.org/abs/2104.09864) |
+| **The Pile / OpenWebText2** (Gao et al., 2020) | Training dataset (`the_pile_openwebtext2` via HuggingFace) | [arXiv:2101.00027](https://arxiv.org/abs/2101.00027) |
+| **Pause Tokens** (Goyal et al., 2023) | Stretch goal — explicit pause tokens as a baseline against internalized recurrence | [arXiv:2310.02226](https://arxiv.org/abs/2310.02226) |
+| **Pre-LN Transformer** (Xiong et al., 2020) | LN-CoTFormer variant uses pre-layer-norm placement studied here | [arXiv:2002.04745](https://arxiv.org/abs/2002.04745) |
 
 ## Repo Structure
 
 ```
 .
-├── README.md
-├── .gitignore
 ├── rcotformer.def               ← Container recipe (PyTorch + CUDA 12.1)
 ├── rcotformer.sif               ← Container image (gitignored)
 ├── job.slurm.example            ← Slurm template for new packages
 ├── rcotformer.def.example       ← Annotated container recipe template
 │
 └── iridis_gpu_test/             ← Package: GPU smoke test
-    ├── job.slurm                ← Submit: sbatch iridis_gpu_test/job.slurm
+    ├── job.slurm
     └── test_gpu.py
 ```
 
-Each package is a self-contained directory with its own `job.slurm` and scripts. The `.sif` container image is shared at the project root. All jobs are submitted from the project root (`~/dpdl/` on Iridis).
+Each package is a self-contained directory with its own `job.slurm` and scripts. The `.sif` container image is shared at the project root. All jobs are submitted from `~/dpdl/` on Iridis.
 
 ## QuickStart
 
-### Iridis X (A100 GPU)
+### Building the Container
 
-Iridis X is the University of Southampton's HPC cluster. All dependencies (PyTorch, CUDA) are packaged in an Apptainer container so we don't depend on cluster-installed modules.
-
-**Prerequisites:**
-
-- WSL2 with `apptainer` installed (`sudo apt install apptainer`)
-- SSH access to Iridis X — add this to `~/.ssh/config`:
-
-```
-Host iridis-x
-    HostName loginX002.iridis.soton.ac.uk
-    User <your-username>
-    IdentityFile ~/.ssh/id_ed25519
-```
-
-**1. Build the container** (once, locally in WSL):
+Requires WSL2 with Apptainer (`sudo apt install apptainer`). Build once locally:
 
 ```bash
 sudo apptainer build rcotformer.sif rcotformer.def
 ```
 
-Validate locally in WSL (requires an NVIDIA GPU on the host machine):
+To add Python packages, edit `rcotformer.def` (see `rcotformer.def.example` for guidance) and rebuild.
+
+**Local validation** (WSL with an NVIDIA GPU):
 
 ```bash
 apptainer exec --nv \
@@ -64,59 +60,97 @@ apptainer exec --nv \
     rcotformer.sif python3 iridis_gpu_test/test_gpu.py
 ```
 
-> **WSL2 note:** The `--bind /usr/lib/wsl:/usr/lib/wsl` and `LD_LIBRARY_PATH` overrides are required because WSL2 uses a thin `libcuda` shim that communicates with the Windows GPU driver via `/dev/dxg`. Apptainer's `--nv` flag alone does not inject the D3D12/dxcore libraries the shim depends on. This is only needed on WSL — Iridis compute nodes have native NVIDIA drivers and `--nv` works as-is.
+> **WSL2 note:** The extra `--bind` and `LD_LIBRARY_PATH` are needed because WSL2's `libcuda` shim depends on D3D12/dxcore libraries that `--nv` alone does not inject. This is WSL-only — Iridis has native NVIDIA drivers.
 
-**2. Upload to Iridis** (first time — includes the large `.sif`):
+### Iridis X
+
+#### SSH Access
+
+Add to `~/.ssh/config`:
+
+```
+Host iridis-x
+    HostName loginX002.iridis.soton.ac.uk
+    User <your-username>
+    IdentityFile ~/.ssh/id_ed25519
+```
+
+| Login node | Hardware |
+|------------|----------|
+| LoginX001 | GPU (4x L4, 64 cores, 1TB RAM) |
+| LoginX002 | CPU only (64 cores, 512GB RAM) |
+| LoginX003 | GPU-enabled |
+
+Any login node can submit jobs to any partition — pick whichever is available.
+
+#### Uploading Packages
+
+First time (includes the large `.sif`):
 
 ```bash
 scp rcotformer.sif iridis-x:~/dpdl/
-scp iridis_gpu_test/test_gpu.py iridis_gpu_test/job.slurm iridis-x:~/dpdl/iridis_gpu_test/
+scp iridis_gpu_test/job.slurm iridis_gpu_test/test_gpu.py iridis-x:~/dpdl/iridis_gpu_test/
 ```
 
-Subsequent uploads (scripts only):
+Subsequent pushes (scripts only — use `rsync` to skip unchanged files):
 
 ```bash
-scp iridis_gpu_test/test_gpu.py iridis_gpu_test/job.slurm iridis-x:~/dpdl/iridis_gpu_test/
+rsync -avz --exclude='*.sif' --exclude='slurm_*' \
+    iridis_gpu_test/ iridis-x:~/dpdl/iridis_gpu_test/
 ```
 
-**3. Submit the job:**
+Or with `scp` for individual files:
+
+```bash
+scp iridis_gpu_test/job.slurm iridis_gpu_test/test_gpu.py iridis-x:~/dpdl/iridis_gpu_test/
+```
+
+#### GPU Partitions
+
+Run `sinfo` on Iridis to see current state. Key partitions (as of Feb 2026):
+
+| Partition | GPU | Max time | Access |
+|-----------|-----|----------|--------|
+| `ecsstudents_l4` | L4 (24GB) | 1 day | ECS undergrads (guaranteed) |
+| `a100` | A100 (80GB) | 2d12h | May require approval |
+| `scavenger_l4` | L4 (24GB) | 12h | Preemptible, open |
+| `scavenger_4a100` | A100 (80GB) | 12h | Preemptible, open |
+
+Useful discovery commands:
+
+```bash
+sinfo                                    # All partitions and node states
+sinfo -p ecsstudents_l4 --Node --long    # Detailed view of a partition
+scontrol show partition ecsstudents_l4   # Partition limits
+sacctmgr show assoc user=$USER           # Your account name
+```
+
+#### Submitting and Monitoring
 
 ```bash
 ssh iridis-x
 cd ~/dpdl
-sbatch iridis_gpu_test/job.slurm
+sbatch iridis_gpu_test/job.slurm        # Submit
+squeue -u $(whoami)                      # Job status
+cat iridis_gpu_test/slurm_<job_id>.out   # Output
+scancel <job_id>                         # Cancel
+seff <job_id>                            # Post-run efficiency
 ```
-
-**4. Monitor:**
-
-```bash
-squeue -u $(whoami)                          # Job status
-cat iridis_gpu_test/slurm_<job_id>.out       # Output after completion
-scancel <job_id>                             # Cancel if needed
-seff <job_id>                                # Post-run efficiency stats
-```
-
-A successful run prints the GPU name, memory, and a matrix-multiply result confirming CUDA works end-to-end.
-
-> **Tip:** Use `sinfo -p gpu` to check available GPU nodes. Compute nodes lack `fusermount`, which is why the slurm script uses `--unsquash`.
 
 ### Adding a New Package
 
-1. Create the package directory and copy the templates:
+```bash
+mkdir -p <your_package>
+cp job.slurm.example <your_package>/job.slurm
+```
+
+1. Edit `<your_package>/job.slurm` — replace every `<PKG_NAME>` with your directory name, pick a partition and GPU type, adjust memory and wall time.
+
+2. Add your Python scripts to `<your_package>/`.
+
+3. Upload and submit:
    ```bash
-   mkdir -p <your_package>
-   cp job.slurm.example <your_package>/job.slurm
-   ```
-
-2. Edit `<your_package>/job.slurm` — replace every `<PKG_NAME>` with your directory name and adjust resources (GPU count, memory, wall time).
-
-3. Add your Python scripts to `<your_package>/`.
-
-4. If you need extra Python packages, edit `rcotformer.def`, rebuild the `.sif`, and re-upload it. See `rcotformer.def.example` for guidance.
-
-5. Upload and submit:
-   ```bash
-   scp <your_package>/*.py <your_package>/job.slurm iridis-x:~/dpdl/<your_package>/
+   rsync -avz <your_package>/ iridis-x:~/dpdl/<your_package>/
    ssh iridis-x "cd ~/dpdl && sbatch <your_package>/job.slurm"
    ```
 
@@ -126,4 +160,4 @@ A successful run prints the GPU name, memory, and a matrix-multiply result confi
 
 ## Acknowledgements
 
-We gratefully acknowledge the University of Southampton's ECS faculty for granting access to the Iridis X high-performance computing cluster, which provides the A100 GPU resources used for training and evaluation in this project.
+We gratefully acknowledge the University of Southampton's ECS faculty for granting access to the Iridis X high-performance computing cluster and its GPU resources used for training and evaluation in this project.

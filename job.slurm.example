@@ -11,19 +11,26 @@
 #        sbatch <your_package>/job.slurm
 #
 # FINDING CLUSTER INFORMATION:
-#   sinfo -s                              # List all partitions and node counts
-#   sinfo -p gpu --Node --long            # Detailed GPU node info
+#   sinfo                                 # List all partitions, nodes, and state
+#   sinfo -p <partition> --Node --long    # Detailed info for a specific partition
 #   sacctmgr show assoc user=$USER        # Your account name (--account below)
-#   scontrol show partition gpu            # Partition limits (max time, etc.)
+#   scontrol show partition <partition>    # Partition limits (max time, etc.)
 ################################################################################
 
 #--- Job identity -------------------------------------------------------
 #SBATCH --job-name=<PKG_NAME>
 
 #--- Partition and account ----------------------------------------------
-# "gpu" is the GPU partition on Iridis X. Verify with: sinfo -s
-# Your account may differ — check with: sacctmgr show assoc user=$USER
-#SBATCH --partition=gpu
+# Run 'sinfo' to see all partitions. Key GPU partitions (as of Feb 2026):
+#
+#   ecsstudents_l4   — L4 GPUs (24GB), 1-day max, ECS undergrads (ecsai01-06)
+#   a100             — A100 GPUs (80GB), 2d12h max (rose02-13)
+#   scavenger_l4     — L4 scavenger (12h max, preemptible)
+#   scavenger_4a100  — A100 scavenger (12h max, preemptible)
+#
+# For undergrads, use ecsstudents_l4 (guaranteed access).
+# Check your account with: sacctmgr show assoc user=$USER
+#SBATCH --partition=ecsstudents_l4
 #SBATCH --account=ecsstudents
 
 #--- Node and task layout -----------------------------------------------
@@ -38,12 +45,13 @@
 
 #--- GPU request --------------------------------------------------------
 # Format: --gres=gpu:<type>:<count>
-# Common GPU types on Iridis X:
-#   a100   — NVIDIA A100 (80GB)
-#   l4     — NVIDIA L4 (24GB, available on login node LoginX001)
-# To request 2 A100s: --gres=gpu:a100:2
-# To request any GPU:  --gres=gpu:1
-#SBATCH --gres=gpu:a100:1
+# Available GPU types on Iridis X (check with sinfo):
+#   l4     — NVIDIA L4 (24GB)     on ecsstudents_l4, scavenger_l4
+#   a100   — NVIDIA A100 (80GB)   on a100, scavenger_4a100
+#   h100   — NVIDIA H100          on swarm_h100 (restricted)
+#   h200   — NVIDIA H200          on quad_h200, dual_h200 (restricted)
+# To request 2 GPUs: --gres=gpu:l4:2
+#SBATCH --gres=gpu:l4:1
 
 #--- Memory -------------------------------------------------------------
 # RAM allocated to your job. If your job is killed with "OOM", increase
