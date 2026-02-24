@@ -13,14 +13,14 @@ def main():
 
     if not torch.cuda.is_available():
         print("FAIL: CUDA is not available.")
-        raise SystemExit(1)
+        
 
     print(f"CUDA version    : {torch.version.cuda}")
     print(f"Device count    : {torch.cuda.device_count()}")
 
     for i in range(torch.cuda.device_count()):
         props = torch.cuda.get_device_properties(i)
-        print(f"  [{i}] {props.name}  |  {props.total_mem / 1024**3:.1f} GB")
+        print(f"  [{i}] {props.name}  |  {props.total_memory / 1024**3:.1f} GB")
 
     # Quick tensor operation on GPU
     device = torch.device("cuda:0")

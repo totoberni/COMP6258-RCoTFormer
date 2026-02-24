@@ -49,11 +49,16 @@ cd iridis
 sudo apptainer build ../rcotformer.sif rcotformer.def
 ```
 
-Validate locally (GPU check will be skipped without a GPU):
+Validate locally in WSL (requires an NVIDIA GPU on the host machine):
 
 ```bash
-apptainer exec rcotformer.sif python3 -c "import torch; print(torch.__version__)"
+apptainer exec --nv \
+    --bind /usr/lib/wsl:/usr/lib/wsl \
+    --env LD_LIBRARY_PATH=/usr/lib/wsl/lib \
+    rcotformer.sif python3 iridis/test_gpu.py
 ```
+
+> **WSL2 note:** The `--bind /usr/lib/wsl:/usr/lib/wsl` and `LD_LIBRARY_PATH` overrides are required because WSL2 uses a thin `libcuda` shim that communicates with the Windows GPU driver via `/dev/dxg`. Apptainer's `--nv` flag alone does not inject the D3D12/dxcore libraries the shim depends on. This is only needed on WSL — Iridis compute nodes have native NVIDIA drivers and `--nv` works as-is.
 
 **2. Upload to Iridis** (first time — includes the large `.sif`):
 
