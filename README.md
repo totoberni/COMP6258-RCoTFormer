@@ -17,18 +17,23 @@
 ```
 .
 ├── README.md
+├── rcotformer.sif               ← Apptainer container image (gitignored)
 └── iridis/
-    ├── test_gpu.py          ← PyTorch + CUDA smoke test
-    └── job.slurm            ← Slurm submission script (A100 partition)
+    ├── rcotformer.def           ← Container recipe (PyTorch + CUDA 12.1)
+    ├── test_gpu.py              ← PyTorch + CUDA smoke test
+    └── job.slurm                ← Slurm submission script (A100 partition)
 ```
 
 ## QuickStart
 
 ### Iridis X (A100 GPU)
 
-Iridis X is the University of Southampton's HPC cluster. The steps below verify that you can submit a GPU job and run PyTorch on an A100 node.
+Iridis X is the University of Southampton's HPC cluster. All dependencies (PyTorch, CUDA) are packaged in an Apptainer container so we don't depend on cluster-installed modules.
 
-**Prerequisites:** SSH access to Iridis X. Add this to `~/.ssh/config`:
+**Prerequisites:**
+
+- WSL2 with `apptainer` installed (`sudo apt install apptainer`)
+- SSH access to Iridis X — add this to `~/.ssh/config`:
 
 ```
 Host iridis-x
@@ -37,13 +42,33 @@ Host iridis-x
     IdentityFile ~/.ssh/id_ed25519
 ```
 
-**1. Upload the test files** (from the repo root):
+**1. Build the container** (once, locally in WSL):
+
+```bash
+cd iridis
+sudo apptainer build ../rcotformer.sif rcotformer.def
+```
+
+Validate locally (GPU check will be skipped without a GPU):
+
+```bash
+apptainer exec rcotformer.sif python3 -c "import torch; print(torch.__version__)"
+```
+
+**2. Upload to Iridis** (first time — includes the large `.sif`):
+
+```bash
+scp rcotformer.sif iridis-x:~/rcotformer/
+scp iridis/test_gpu.py iridis/job.slurm iridis-x:~/rcotformer/iridis/
+```
+
+Subsequent uploads (scripts only):
 
 ```bash
 scp iridis/test_gpu.py iridis/job.slurm iridis-x:~/rcotformer/iridis/
 ```
 
-**2. Submit the job:**
+**3. Submit the job:**
 
 ```bash
 ssh iridis-x
@@ -51,9 +76,7 @@ cd ~/rcotformer
 sbatch iridis/job.slurm
 ```
 
-On first run the job creates a virtual environment at `~/venvs/rcotformer` and installs PyTorch with CUDA 12.1 support. Subsequent runs reuse the existing environment.
-
-**3. Monitor:**
+**4. Monitor:**
 
 ```bash
 squeue -u $(whoami)                   # Job status
@@ -63,7 +86,7 @@ scancel <job_id>                      # Cancel if needed
 
 A successful run prints the GPU name, memory, and a matrix-multiply result confirming CUDA works end-to-end.
 
-> **Tip:** Use `sinfo -p gpu` to check available GPU nodes and `seff <job_id>` for post-run efficiency stats.
+> **Tip:** Use `sinfo -p gpu` to check available GPU nodes and `seff <job_id>` for post-run efficiency stats. Compute nodes lack `fusermount`, which is why the slurm script uses `--unsquash`.
 
 ## Use Guide
 

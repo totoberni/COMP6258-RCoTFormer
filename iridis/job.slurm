@@ -11,28 +11,15 @@
 #SBATCH --output=iridis/slurm_%j.out
 #SBATCH --error=iridis/slurm_%j.err
 
-# ── Load modules ─────────────────────────────────────────────
-module purge
-module load python/3.11.3
-module load cuda/12.1
-module load cudnn/8.9.7-cuda12
+# ── Load Apptainer ───────────────────────────────────────────
+module load apptainer
 
-# ── Virtual environment ─────────────────────────────────────
-VENV_DIR="$HOME/venvs/rcotformer"
-
-if [ ! -d "$VENV_DIR" ]; then
-    echo "Creating virtual environment at $VENV_DIR ..."
-    python -m venv "$VENV_DIR"
-    source "$VENV_DIR/bin/activate"
-    pip install --upgrade pip
-    pip install torch --index-url https://download.pytorch.org/whl/cu121
-else
-    source "$VENV_DIR/bin/activate"
-fi
-
-# ── Run ──────────────────────────────────────────────────────
+# ── Run inside container ─────────────────────────────────────
+# --nv: exposes host NVIDIA drivers + GPUs to the container
+# --unsquash: required on compute nodes (no fusermount)
+# --bind $PWD: makes project files visible inside the container
 echo "Node: $(hostname)"
-echo "GPUs: $SLURM_GPUS_ON_NODE"
 nvidia-smi
 
-python iridis/test_gpu.py
+apptainer exec --nv --unsquash --bind $PWD rcotformer.sif \
+    python3 iridis/test_gpu.py
