@@ -50,8 +50,11 @@
 #   a100   — NVIDIA A100 (80GB)   on a100, scavenger_4a100
 #   h100   — NVIDIA H100          on swarm_h100 (restricted)
 #   h200   — NVIDIA H200          on quad_h200, dual_h200 (restricted)
-# To request 2 GPUs: --gres=gpu:l4:2
-#SBATCH --gres=gpu:l4:1
+# To request 2 GPUs: --gres=gpu:2
+# NOTE: Use --gres=gpu:N (without type). Specifying a type (e.g. gpu:l4:1)
+# may silently fail if the type name doesn't match Slurm's gres config,
+# causing the job to run without GPU access.
+#SBATCH --gres=gpu:1
 
 #--- Memory -------------------------------------------------------------
 # RAM allocated to your job. If your job is killed with "OOM", increase

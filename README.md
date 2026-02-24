@@ -105,6 +105,20 @@ Or with `scp` for individual files:
 scp iridis_gpu_test/job.slurm iridis_gpu_test/test_gpu.py iridis-x:~/dpdl/iridis_gpu_test/
 ```
 
+#### Downloading Results
+
+Pull Slurm logs for a specific job:
+
+```bash
+scp iridis-x:~/dpdl/iridis_gpu_test/slurm_<job_id>.{out,err} iridis_gpu_test/
+```
+
+Sync an entire package directory (excludes the `.sif`):
+
+```bash
+rsync -avz --exclude='*.sif' iridis-x:~/dpdl/iridis_gpu_test/ iridis_gpu_test/
+```
+
 #### GPU Partitions
 
 Run `sinfo` on Iridis to see current state. Key partitions (as of Feb 2026):
@@ -144,7 +158,7 @@ mkdir -p <your_package>
 cp job.slurm.example <your_package>/job.slurm
 ```
 
-1. Edit `<your_package>/job.slurm` — replace every `<PKG_NAME>` with your directory name, pick a partition and GPU type, adjust memory and wall time.
+1. Edit `<your_package>/job.slurm` — replace every `<PKG_NAME>` with your directory name, pick a partition, adjust memory and wall time. Use `--gres=gpu:N` without a type specifier (the partition determines the GPU type).
 
 2. Add your Python scripts to `<your_package>/`.
 

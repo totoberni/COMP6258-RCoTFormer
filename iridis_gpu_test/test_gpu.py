@@ -1,5 +1,6 @@
-"""Minimal PyTorch + CUDA smoke test for Iridis X A100 nodes."""
+"""Minimal PyTorch + CUDA smoke test for Iridis X GPU nodes."""
 
+import sys
 import torch
 
 
@@ -13,7 +14,7 @@ def main():
 
     if not torch.cuda.is_available():
         print("FAIL: CUDA is not available.")
-        
+        sys.exit(1)
 
     print(f"CUDA version    : {torch.version.cuda}")
     print(f"Device count    : {torch.cuda.device_count()}")
